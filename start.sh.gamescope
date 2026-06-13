@@ -1,0 +1,138 @@
+#!/bin/bash
+set -e
+
+# Re-exec under a private session bus so nothing leaks into / collides with
+# whatever bus the SSH login user has (often none). This must be done before
+# we spawn gamescope/steam so the whole tree shares one fresh bus.
+if [ -z "$STEAM_HEADLESS_DBUS" ]; then
+	export STEAM_HEADLESS_DBUS=1
+	exec dbus-run-session -- "$0" "$@"
+fi
+
+cleanup() {
+	trap - EXIT INT TERM
+	[ -n "$gamescope_pid" ] && kill -9 "$gamescope_pid" 2>/dev/null || true
+	kill 0 2>/dev/null || true
+	[ -n "$tmpdir" ] && rm -rf "$tmpdir"
+}
+trap cleanup EXIT INT TERM
+
+# Force NVIDIA RTX 5090 (10de:2b85) over the AMD iGPU on the 9950X for
+# anything that doesn't honour gamescope's --prefer-vk-device.
+export MESA_VK_DEVICE_SELECT=10de:2b85
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __VK_LAYER_NV_optimus=NVIDIA_only
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+
+export PROTON_LOG=1
+
+# Env taken from ChimeraOS gamescope-session-plus + Games on Whales steam
+# startup. These are the SteamOS-equivalent defaults that Steam and games
+# expect when they live inside gamescope.
+export STEAM_GAMESCOPE_FANCY_SCALING_SUPPORT=1
+export SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS=0
+export SRT_URLOPEN_PREFER_STEAM=1
+export ENABLE_GAMESCOPE_WSI=1
+export QT_QPA_PLATFORM=xcb
+export QT_IM_MODULE=steam
+export GTK_IM_MODULE=Steam
+# Apps inside gamescope must use X11 (gamescope's Xwayland), not Wayland.
+# Without this, libraries that auto-detect via XDG_SESSION_TYPE pick wayland.
+export XDG_SESSION_TYPE=x11
+# Stop xdg-desktop-portal backends from spawning. They crash on startup with
+# no DISPLAY, then portal RPC calls (e.g. SDL Realtime portal) hang waiting
+# for a backend that will never come up.
+export XDG_DESKTOP_PORTAL_DIR=""
+# NV12 colorspace for gamescope's pipewire output (Steam Remote Play reads it).
+export GAMESCOPE_NV12_COLORSPACE=k_EStreamColorspace_BT601
+# gamescope workaround for dummy-plane interaction issues — kept on permanently
+# in ChimeraOS / SteamOS sessions.
+export GAMESCOPE_DISABLE_ASYNC_FLIPS=1
+# vk_xwayland_wait_ready=false (set by ChimeraOS for AMD/RADV) — disabled here
+# because on NVIDIA's stricter WSI it produces "got the same buffer committed
+# twice, ignoring" in gamescope's xwm: DXVK skips the GPU fence wait, hands
+# Xwayland a buffer the GPU isn't done with, gamescope sees a duplicate commit
+# and drops the frame, pipewire stream goes idle, the Deck shows black.
+export VKD3D_SWAPCHAIN_LATENCY_FRAMES=3
+export WINEDLLOVERRIDES=dxgi=n
+export mesa_glthread=true
+# Force SDL inside Wine/Proton to use the evdev path instead of HIDAPI for
+# game controllers. Reason: Steam Remote Play forwards the Deck's controller
+# as a virtual uinput device with Valve's VID (0x28de). SDL's HIDAPI backend
+# sees the Valve VID and tries the Steam Controller hidraw path, but no
+# matching /dev/hidraw* exists on this host (Steam uses uinput, not uhid),
+# so HIDAPI fails and SDL never falls back to evdev. Disabling HIDAPI sends
+# everything down the evdev path which picks up /dev/input/event11 cleanly.
+export SDL_JOYSTICK_HIDAPI=0
+# Tell Proton's winebus.sys to use SDL2 (evdev) backend instead of the default
+# HID/hidraw backend. The HID backend reads /dev/hidraw* nodes which don't
+# exist for the Steam-Remote-Play-forwarded virtual gamepad — Steam creates it
+# via /dev/uinput which produces /dev/input/event11 only. SDL2 backend reads
+# evdev directly and picks up event11.
+export PROTON_PREFER_SDL=1
+
+# Steam opens a *lot* of file descriptors for shader caches / IPC sockets;
+# matches ChimeraOS' default.
+ulimit -n 524288
+
+# Set up gamescope ready-FD socket. gamescope writes "DISPLAY WL_DISPLAY" once
+# it's accepting connections; we read those back and export them so Steam
+# (running as a child) connects to gamescope's Xwayland via X11.
+tmpdir="$(mktemp -p "${XDG_RUNTIME_DIR:-/tmp}" -d -t gamescope.XXXXXXX)"
+socket="$tmpdir/startup.socket"
+stats="$tmpdir/stats.pipe"
+mkfifo -- "$socket"
+mkfifo -- "$stats"
+export GAMESCOPE_STATS="$stats"
+# Callback-based framerate limiter — kept alongside our other per-session
+# files in $XDG_RUNTIME_DIR/gamescope.* so it's cleaned up with the session
+# instead of accumulating in /tmp.
+export GAMESCOPE_LIMITER_FILE="$tmpdir/limiter"
+: >"$GAMESCOPE_LIMITER_FILE"
+
+# --backend headless: no display, but pipewire stream of composited output
+# --prefer-vk-device 10de:2b85: pin compositor to the RTX 5090 so its
+#   pipewire dmabufs come from the same GPU the game renders on (avoids
+#   cross-GPU import failures going to the iGPU)
+# --xwayland-count 2: one X server for Steam, one for games (SteamOS layout)
+# --steam: window tagging for Steam Input controller routing
+# --ready-fd / --stats-path: ready and stats sockets
+# Stock Fedora gamescope (3.16.23+) — verified 2026-06-12 to produce correct
+# NVIDIA pipewire colors via glxgears capture test, so the old bSampled patch
+# (cmspam fork fix/nvidia-pipewire-streaming-colors) is no longer needed.
+gamescope \
+	--backend headless \
+	--prefer-vk-device 10de:2b85 \
+	--output-width 2560 --output-height 1440 \
+	--nested-refresh 144 \
+	--fullscreen \
+	--xwayland-count 2 \
+	--force-grab-cursor \
+	--force-composition \
+	--force-windows-fullscreen \
+	--ready-fd "$socket" \
+	--stats-path "$stats" \
+	--steam &
+gamescope_pid=$!
+
+if read -r -t 10 response_x_display response_wl_display <>"$socket"; then
+	export DISPLAY="$response_x_display"
+	export GAMESCOPE_WAYLAND_DISPLAY="$response_wl_display"
+	# Force Steam onto X11 (gamescope's Xwayland) — without this Steam may try
+	# to connect to gamescope as a Wayland client, which has worse window
+	# tagging and breaks Steam Input.
+	unset WAYLAND_DISPLAY
+	echo "gamescope ready: DISPLAY=$DISPLAY GAMESCOPE_WAYLAND_DISPLAY=$GAMESCOPE_WAYLAND_DISPLAY"
+else
+	echo "gamescope failed to publish ready-FD within 10s" >&2
+	kill -9 "$gamescope_pid" 2>/dev/null || true
+	exit 1
+fi
+
+# -pipewire: enable pipewire dmabuf path for Steam Remote Play video capture
+#   (so Steam pulls dmabufs from gamescope's pipewire output instead of doing
+#   a CPU-side glReadPixels).
+steam -gamepadui -pipewire
+
+kill "$gamescope_pid" 2>/dev/null || true
+wait

@@ -1,0 +1,61 @@
+#!/bin/bash
+set -e
+
+# Re-exec under a private session bus so nothing leaks into / collides with
+# whatever bus the SSH login user has (often none).
+if [ -z "$STEAM_HEADLESS_DBUS" ]; then
+	export STEAM_HEADLESS_DBUS=1
+	exec dbus-run-session -- "$0" "$@"
+fi
+
+cleanup() {
+	trap - EXIT INT TERM
+	kill 0 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Force NVIDIA RTX 5090 (10de:2b85) over the AMD iGPU on the 9950X.
+export MESA_VK_DEVICE_SELECT=10de:2b85
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __VK_LAYER_NV_optimus=NVIDIA_only
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+
+# Don't pause/minimize on focus loss — focus events are flaky headless.
+export SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS=0
+
+# Steam IME for Qt/GTK (Big Picture text input), and force Steam's own
+# Qt apps to render on X11/Xwayland.
+export QT_QPA_PLATFORM=xcb
+export QT_IM_MODULE=steam
+export GTK_IM_MODULE=Steam
+export SRT_URLOPEN_PREFER_STEAM=1
+
+# Advertise Wayland session type so Steam's `-pipewire` capture path
+# works via the screencast portal — needed for Desktop_MovieStream to
+# produce frames when the GameOverlay hook isn't active (e.g. anti-cheat
+# games). Cursor over Steam's CEF surfaces may render incorrectly as a
+# trade-off (mutter --headless doesn't draw a Wayland cursor sprite).
+export XDG_SESSION_TYPE=wayland
+
+# Use a real cursor theme — mutter --headless leaves the X11 default
+# (a 1px dot) otherwise, which is hard to see when streaming.
+export XCURSOR_THEME=Adwaita
+export XCURSOR_SIZE=24
+
+# Wine / Proton: force DXVK's dxgi.dll, plus a small swapchain buffer for
+# smoother D3D12 streaming via vkd3d-proton.
+export WINEDLLOVERRIDES=dxgi=n
+export VKD3D_SWAPCHAIN_LATENCY_FRAMES=3
+
+# Steam opens a *lot* of file descriptors.
+ulimit -n 524288
+
+# Start mutter as a headless wayland compositor with a single virtual monitor,
+# and run Steam as its child via `-- steam ...`. Steam's own Remote Play uses
+# pipewire to capture the game window and stream to clients. mutter sets up
+# WAYLAND_DISPLAY and Xwayland's DISPLAY in the child's environment.
+exec mutter \
+	--headless \
+	--wayland \
+	--virtual-monitor 2560x1440@144 \
+	-- steam -pipewire
