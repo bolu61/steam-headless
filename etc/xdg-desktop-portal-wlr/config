@@ -1,0 +1,6 @@
+[screencast]
+max_fps=165
+# Headless: never launch a GUI output chooser (slurp), it needs pointer input
+# and would hang. Capture the single headless output directly.
+chooser_type=none
+output_name=HEADLESS-1

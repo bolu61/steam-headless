@@ -1,0 +1,10 @@
+[submodule "gamescope"]
+	path = ext/gamescope
+	url = https://github.com/bolu61/gamescope.git
+	branch = master
+[submodule "xdg-desktop-portal-generic"]
+	path = ext/xdg-desktop-portal-generic
+	url = https://github.com/lamco-admin/xdg-desktop-portal-generic.git
+[submodule "ext/xserver"]
+	path = ext/xserver
+	url = https://gitlab.freedesktop.org/xorg/xserver.git

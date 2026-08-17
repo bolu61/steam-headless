@@ -1,0 +1,20 @@
+[Unit]
+Description=Headless Steam streaming host (sway + Steam)
+After=pipewire.service pipewire-pulse.service
+Wants=pipewire.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+
+ExecStart=%D/steam-headless/start.sh
+
+ExecStop=/usr/bin/steam -shutdown
+TimeoutStopSec=30
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,9 @@
+set $mod Mod1
+
+output HEADLESS-1 resolution 2560x1440@165Hz
+
+exec dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+
+exec $HEADLESS_STEAM_DIR/ext/xdg-desktop-portal-generic/target/release/xdg-desktop-portal-generic
+
+exec sh -c 'env LD_PRELOAD=$HEADLESS_STEAM_DIR/build/libxfixes-shim.so steam -pipewire -gamepadui; swaymsg exit'

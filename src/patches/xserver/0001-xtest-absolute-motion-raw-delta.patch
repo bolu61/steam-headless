@@ -1,0 +1,61 @@
+diff --git a/dix/getevents.c b/dix/getevents.c
+index c39ef3371..65a0ac998 100644
+--- a/dix/getevents.c
++++ b/dix/getevents.c
+@@ -231,6 +231,35 @@ set_raw_valuators(RawDeviceEvent *event, ValuatorMask *mask,
+     }
+ }
+ 
++/**
++ * Raw events are meant to report relative motion (this is what a
++ * relative-mode device, which is what XTEST's virtual pointer device
++ * advertises itself as, is expected to report). Absolute injection (e.g.
++ * XTestFakeMotionEvent) has no delta of its own to report, so this computes
++ * one against the device's last known position instead of storing the
++ * absolute coordinate as if it were a delta -- doing that corrupts any
++ * client reading RawMotion for relative look/gesture purposes with what
++ * looks like a huge, always-positive "jump" toward the injected position.
++ */
++static void
++set_raw_valuators_from_absolute(RawDeviceEvent *event, DeviceIntPtr pDev,
++                                ValuatorMask *mask, double *data)
++{
++    ValuatorMask delta;
++    int i;
++
++    valuator_mask_zero(&delta);
++    for (i = 0; i < valuator_mask_size(mask); i++) {
++        if (valuator_mask_isset(mask, i)) {
++            double last = (i < 2) ? pDev->last.valuators[i] : 0.0;
++
++            valuator_mask_set_double(&delta, i,
++                                     valuator_mask_get_double(mask, i) - last);
++        }
++    }
++    set_raw_valuators(event, &delta, FALSE, data);
++}
++
+ static void
+ set_valuators(DeviceIntPtr dev, DeviceEvent *event, ValuatorMask *mask)
+ {
+@@ -1389,7 +1418,10 @@ fill_pointer_events(InternalEvent *events, DeviceIntPtr pDev, int type,
+         if (flags & POINTER_EMULATED)
+             raw->flags = XIPointerEmulated;
+ 
+-        set_raw_valuators(raw, &mask, TRUE, raw->valuators.data_raw);
++        if (flags & POINTER_ABSOLUTE)
++            set_raw_valuators_from_absolute(raw, pDev, &mask, raw->valuators.data_raw);
++        else
++            set_raw_valuators(raw, &mask, TRUE, raw->valuators.data_raw);
+     }
+ 
+     valuator_mask_drop_unaccelerated(&mask);
+@@ -1406,7 +1438,7 @@ fill_pointer_events(InternalEvent *events, DeviceIntPtr pDev, int type,
+         transformAbsolute(pDev, &mask);
+         clipAbsolute(pDev, &mask);
+         if ((flags & POINTER_NORAW) == 0 && raw)
+-            set_raw_valuators(raw, &mask, FALSE, raw->valuators.data);
++            set_raw_valuators_from_absolute(raw, pDev, &mask, raw->valuators.data);
+     }
+     else {
+         transformRelative(pDev, &mask);
