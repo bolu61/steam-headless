@@ -6,4 +6,4 @@ exec dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_
 
 exec $HEADLESS_STEAM_DIR/ext/xdg-desktop-portal-generic/target/release/xdg-desktop-portal-generic
 
-exec sh -c 'steam -pipewire -gamepadui; swaymsg exit'
+exec sh -c 'steam -pipewire; swaymsg exit'
