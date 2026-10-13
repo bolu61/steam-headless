@@ -12,8 +12,9 @@ export XDG_CURRENT_DESKTOP=sway
 # Makes Proton run its wrapped Windows games as native Wayland clients instead of XWayland.
 #export PROTON_ENABLE_WAYLAND=1
 
-# dmabuf zero-copy needs rendering on the same GPU Steam encodes on.
-export WLR_RENDER_DRM_DEVICE=/dev/dri/renderD129
+# Steam's PipeWire capture only accepts LINEAR dmabufs; on NVIDIA, sway's
+# swapchain offers only tiled modifiers, forcing a CPU copy and conversion.
+export WLR_RENDER_DRM_DEVICE=/dev/dri/renderD128
 export WLR_RENDERER=vulkan
 export WLR_BACKENDS=headless
 
