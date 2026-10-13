@@ -34,7 +34,7 @@ uninstall:
 	rm -f $(LINKS)
 	systemctl --user daemon-reload
 
-# Patched Xwayland (see project_nte_menu_drag_is_engine_bug memory for why):
+# Patched Xwayland (see the WLR_XWAYLAND comment in bin/start.sh for why):
 # resets ext/xserver to its pinned tag, applies our local patches on top, and
 # builds. Re-run any time the submodule pointer or patches change; safe to
 # re-run otherwise (git checkout -- is a no-op on an already-clean tree).

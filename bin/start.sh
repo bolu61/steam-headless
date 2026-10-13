@@ -25,10 +25,9 @@ export XDP_GENERIC_SOURCE_PICKER="$HEADLESS_STEAM_DIR/bin/picker.sh"
 # Patched Xwayland: XTestFakeMotionEvent (absolute XTest injection) stored the
 # absolute coordinate directly into XI2 RawMotion events instead of computing
 # a delta against the device's last known position -- corrupting any client
-# reading RawMotion for relative look/gesture input (e.g. NTE's touch-swipe
-# menus). XWarpPointer got an equivalent fix for the same underlying issue in
-# 2011; XTestFakeMotionEvent never did. See ext/xserver's patch on top of
-# xwayland-24.1.13 and the project_nte_menu_drag_is_engine_bug memory.
+# reading RawMotion for relative look/gesture input. XWarpPointer got an
+# equivalent fix for the same underlying issue in 2011; XTestFakeMotionEvent
+# never did. See src/patches/xserver/, applied on top of xwayland-24.1.13.
 export WLR_XWAYLAND="$HEADLESS_STEAM_DIR/ext/xserver/build/hw/xwayland/Xwayland"
 
 exec dbus-run-session -- sway --config "$HEADLESS_STEAM_DIR/etc/sway/config"
