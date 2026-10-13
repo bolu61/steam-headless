@@ -2,6 +2,10 @@ set $mod Mod1
 
 output HEADLESS-1 resolution 2560x1440@165Hz
 
+for_window [all] floating enable
+# Steam crops the desktop stream to the bounding box of all the game's X windows, unmapped ones included.
+for_window [class="^steam_app_" title="."] fullscreen enable
+
 exec dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
 
 exec $HEADLESS_STEAM_DIR/ext/xdg-desktop-portal-generic/target/release/xdg-desktop-portal-generic
