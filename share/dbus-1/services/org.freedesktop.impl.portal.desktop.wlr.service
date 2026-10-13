@@ -1,3 +1,3 @@
 [D-BUS Service]
 Name=org.freedesktop.impl.portal.desktop.wlr
-Exec=/home/bolu/Repositories/steam-headless/ext/xdg-desktop-portal-wlr/build/xdg-desktop-portal-wlr
+Exec=/bin/sh -c 'exec "$HEADLESS_STEAM_DIR/ext/xdg-desktop-portal-wlr/build/xdg-desktop-portal-wlr"'
