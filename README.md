@@ -8,7 +8,7 @@ Requires Steam beta rt3.
 Install everything with:
 
 ```sh
-make xwayland install
+make xwayland portal-wlr install
 ```
 
 IMPORTANT: I didn't test this on any other machine except my own.
