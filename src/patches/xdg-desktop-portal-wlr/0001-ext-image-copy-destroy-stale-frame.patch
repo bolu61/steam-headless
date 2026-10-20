@@ -1,0 +1,35 @@
+From 657a435c73c720d3567cfc2071e3862f30f84c83 Mon Sep 17 00:00:00 2001
+From: bolu61 <bolu61@zjc.dev>
+Date: Fri, 21 Aug 2026 00:50:55 -0400
+Subject: [PATCH 1/2] screencast/ext_image_copy: destroy stale frame before
+ creating a new one
+
+Fixes duplicate_frame protocol error ("session already has a frame
+object") that kills the Wayland connection when a PipeWire stream
+state transition (STREAMING -> PAUSED -> STREAMING) leaves a stale
+ext-image-copy-capture-v1 frame object alive and ext_register_frame_cb
+creates a new one without destroying it first.
+
+Upstream: https://github.com/emersion/xdg-desktop-portal-wlr/pull/380
+(correctly diagnosed and fixed, but closed unmerged over AI-assisted
+contribution policy, not on technical grounds).
+---
+ src/screencast/ext_image_copy.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/screencast/ext_image_copy.c b/src/screencast/ext_image_copy.c
+index afdfcd9..192116c 100644
+--- a/src/screencast/ext_image_copy.c
++++ b/src/screencast/ext_image_copy.c
+@@ -294,6 +294,11 @@ static void ext_register_frame_cb(struct xdpw_screencast_instance *cast) {
+ 			return;
+ 		}
+ 	}
++	if (cast->ext_session.frame) {
++		logprint(WARN, "ext: destroying stale frame before creating a new one");
++		ext_image_copy_capture_frame_v1_destroy(cast->ext_session.frame);
++		cast->ext_session.frame = NULL;
++	}
+ 	cast->ext_session.frame = ext_image_copy_capture_session_v1_create_frame(
+ 			cast->ext_session.capture_session);
+ 	ext_image_copy_capture_frame_v1_add_listener(cast->ext_session.frame,

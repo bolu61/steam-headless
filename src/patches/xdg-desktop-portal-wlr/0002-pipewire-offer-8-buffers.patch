@@ -1,0 +1,29 @@
+From 4e15588476d8498a35ffc9c84f218bf476013a7f Mon Sep 17 00:00:00 2001
+From: bolu61 <bolu61@zjc.dev>
+Date: Tue, 20 Oct 2026 14:50:22 -0400
+Subject: [PATCH 2/2] pipewire: offer 8 buffers by default instead of 2
+
+With 2 buffers the consumer holds one or both while encoding, so most
+process callbacks find no free buffer and the frame is dropped. Steam
+Remote Play streaming a 120 fps game captured only ~48 frames/s, with
+~125 "out of buffers" per second. With 6 buffers capture followed the
+game at 120 frames/s with no drops.
+
+8 matches mutter's default (SPA_POD_CHOICE_RANGE_Int (8, 2, 8)).
+---
+ include/pipewire_screencast.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/pipewire_screencast.h b/include/pipewire_screencast.h
+index f8cd88e..d42af19 100644
+--- a/include/pipewire_screencast.h
++++ b/include/pipewire_screencast.h
+@@ -3,7 +3,7 @@
+ 
+ #include "screencast_common.h"
+ 
+-#define XDPW_PWR_BUFFERS 2
++#define XDPW_PWR_BUFFERS 8
+ #define XDPW_PWR_BUFFERS_MIN 2
+ #define XDPW_PWR_ALIGN 16
+ 

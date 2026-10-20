@@ -15,7 +15,10 @@ XSERVER_DIR := $(REPO_DIR)/ext/xserver
 XSERVER_PATCHES := $(sort $(wildcard $(REPO_DIR)/src/patches/xserver/*.patch))
 XKB_OUTPUT_DIR ?= $(HOME)/.cache/xwayland-xkb
 
-.PHONY: install uninstall xwayland
+PORTAL_WLR_DIR := $(REPO_DIR)/ext/xdg-desktop-portal-wlr
+PORTAL_WLR_PATCHES := $(sort $(wildcard $(REPO_DIR)/src/patches/xdg-desktop-portal-wlr/*.patch))
+
+.PHONY: install uninstall xwayland portal-wlr
 
 install:
 	mkdir -p $(dir $(SERVICE_LINK))
@@ -51,3 +54,15 @@ xwayland:
 		-Dxkb_dir=/usr/share/X11/xkb -Dxkb_bin_dir=/usr/bin \
 		-Dxkb_output_dir=$(XKB_OUTPUT_DIR)
 	ninja -C $(XSERVER_DIR)/build
+
+# Patched xdg-desktop-portal-wlr: resets ext/xdg-desktop-portal-wlr to its
+# pinned tag, applies our local patches on top, and builds. Same re-run rules
+# as the xwayland target.
+portal-wlr:
+	git -C $(PORTAL_WLR_DIR) checkout v0.8.4 -- .
+	git -C $(PORTAL_WLR_DIR) checkout v0.8.4
+	for p in $(PORTAL_WLR_PATCHES); do \
+		git -C $(PORTAL_WLR_DIR) apply "$$p" || exit 1; \
+	done
+	meson setup --reconfigure $(PORTAL_WLR_DIR)/build $(PORTAL_WLR_DIR)
+	ninja -C $(PORTAL_WLR_DIR)/build
